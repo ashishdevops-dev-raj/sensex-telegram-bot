@@ -2,8 +2,8 @@ import yfinance as yf
 import requests
 import datetime
 
-BOT_TOKEN = "7849731018:AAE_97mgILO-PYqjxWzPSPvfORTI-jv6mwo"
-CHANNEL_ID = "-1003658629341"
+BOT_TOKEN = os.environ["BOT_TOKEN"]
+CHANNEL_ID = os.environ["CHANNEL_ID"]
 
 # ---- Fetch daily Sensex data ----
 sensex = yf.Ticker("^BSESN")
