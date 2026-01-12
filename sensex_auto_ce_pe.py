@@ -62,13 +62,15 @@ sensex = get_index_trend("^BSESN", 100)
 nifty  = get_index_trend("^NSEI", 50)
 
 # ======================================================
-# 🎯 Option Levels (static placeholders)
+# 🎯 Option Levels (adjustable placeholders)
 # ======================================================
-CE = {"buy": 320, "sl": 260, "t1": 380, "t2": 450}
-PE = {"buy": 300, "sl": 360, "t1": 220, "t2": 180}
+CE_LEVEL = 80
+PE_LEVEL = 80
+TGT_CE = (380, 450)
+TGT_PE = (200, 300)
 
 # ======================================================
-# 🧩 Build Telegram message block
+# 🧩 Build Telegram message block (Trading Call Style)
 # ======================================================
 def build_block(name, data):
     if "error" in data:
@@ -78,36 +80,29 @@ def build_block(name, data):
 Yahoo Finance issue
 """
 
-    header = f"""
-📊 {name} DAILY SETUP
-🕒 {datetime.datetime.now().strftime("%d %b %Y | %I:%M %p")}
-📈 Spot: {data['spot']}
-📐 EMA20: {data['ema20']} | EMA50: {data['ema50']}
-🧭 Trend: {data['trend']}
-"""
-
     if data["bias"] == "CE":
-        return header + f"""
-{name} {data['atm']} CE
-BUY ABOVE {CE['buy']}
-SL {CE['sl']}
-TGT {CE['t1']} / {CE['t2']}
+        return f"""
+📊 {name} {data['atm']} CE
+Below : {CE_LEVEL}
+TGT : {TGT_CE[0]} / {TGT_CE[1]}
+WAIT FOR ACTIVE
 """
     elif data["bias"] == "PE":
-        return header + f"""
-{name} {data['atm']} PE
-BUY BELOW {PE['buy']}
-SL {PE['sl']}
-TGT {PE['t1']} / {PE['t2']}
+        return f"""
+📊 {name} {data['atm']} PE
+Above : {PE_LEVEL}
+TGT : {TGT_PE[0]} / {TGT_PE[1]}
+WAIT FOR ACTIVE
 """
     else:
-        return header + """
+        return f"""
+📊 {name} {data['atm']}
 Market is SIDEWAYS ⚖️
 Option buying not recommended
 """
 
 # ======================================================
-# 📩 Final Message
+# 📩 Combine Messages
 # ======================================================
 message = (
     build_block("SENSEX", sensex)
@@ -121,7 +116,7 @@ Not a buy/sell recommendation
 )
 
 # ======================================================
-# 🚀 Send to Telegram
+# 🚀 Send Telegram Message
 # ======================================================
 url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 payload = {
