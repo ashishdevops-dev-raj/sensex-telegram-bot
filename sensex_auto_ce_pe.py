@@ -1,9 +1,15 @@
+import os
 import yfinance as yf
 import requests
 import datetime
 
-BOT_TOKEN = os.environ["BOT_TOKEN"]
-CHANNEL_ID = os.environ["CHANNEL_ID"]
+# ---- Read secrets from GitHub Actions ----
+BOT_TOKEN = os.environ.get("BOT_TOKEN")
+CHANNEL_ID = os.environ.get("CHANNEL_ID")
+
+# ---- Safety check ----
+if not BOT_TOKEN or not CHANNEL_ID:
+    raise ValueError("Missing BOT_TOKEN or CHANNEL_ID in environment variables")
 
 # ---- Fetch daily Sensex data ----
 sensex = yf.Ticker("^BSESN")
@@ -88,5 +94,8 @@ Option trading not recommended
 
 # ---- Send to Telegram ----
 url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-payload = {"chat_id": CHANNEL_ID, "text": message}
+payload = {
+    "chat_id": CHANNEL_ID,
+    "text": message
+}
 requests.post(url, data=payload)
