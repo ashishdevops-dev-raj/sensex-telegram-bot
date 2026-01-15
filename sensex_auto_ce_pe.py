@@ -4,105 +4,103 @@ import requests
 import datetime
 
 # ======================================================
-# 🔐 Environment Variables
+# 🔐 Environment variables (GitHub Secrets)
 # ======================================================
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 CHANNEL_ID = os.environ.get("CHANNEL_ID")
 
 if not BOT_TOKEN or not CHANNEL_ID:
-    raise ValueError("BOT_TOKEN or CHANNEL_ID missing")
+    raise ValueError("Missing BOT_TOKEN or CHANNEL_ID")
 
 # ======================================================
-# 📊 Fetch index trend safely (no crash)
+# 📊 Helper function: Fetch daily data & trend
 # ======================================================
 def get_index_trend(symbol, strike_step):
-    try:
-        ticker = yf.Ticker(symbol)
-        df = ticker.history(period="4mo", interval="1d")
+    ticker = yf.Ticker(symbol)
 
-        if df.empty or len(df) < 50:
-            return {"error": "No data available"}
+    # Fetch DAILY data only (avoid intraday glitches)
+    df = ticker.history(period="4mo", interval="1d")
 
-        df["EMA20"] = df["Close"].ewm(span=20).mean()
-        df["EMA50"] = df["Close"].ewm(span=50).mean()
+    if df.empty or len(df) < 50:
+        raise ValueError(f"Not enough data for {symbol}")
 
-        latest = df.iloc[-1]
-        spot = round(float(latest["Close"]), 2)
-        ema20 = round(float(latest["EMA20"]), 2)
-        ema50 = round(float(latest["EMA50"]), 2)
+    # EMA calculations
+    df["EMA20"] = df["Close"].ewm(span=20).mean()
+    df["EMA50"] = df["Close"].ewm(span=50).mean()
 
-        if spot > ema20 and ema20 > ema50:
-            trend = "BULLISH 📈"
-            bias = "CE"
-        elif spot < ema20 and ema20 < ema50:
-            trend = "BEARISH 📉"
-            bias = "PE"
-        else:
-            trend = "SIDEWAYS ⚖️"
-            bias = "NONE"
+    latest = df.iloc[-1]
+    spot = round(float(latest["Close"]), 2)
+    ema20 = round(float(latest["EMA20"]), 2)
+    ema50 = round(float(latest["EMA50"]), 2)
 
-        atm = round(spot / strike_step) * strike_step
+    # Trend logic
+    if spot > ema20 and ema20 > ema50:
+        trend = "BULLISH 📈"
+        bias = "CE"
+    elif spot < ema20 and ema20 < ema50:
+        trend = "BEARISH 📉"
+        bias = "PE"
+    else:
+        trend = "SIDEWAYS ⚖️"
+        bias = "NONE"
 
-        return {
-            "spot": spot,
-            "ema20": ema20,
-            "ema50": ema50,
-            "trend": trend,
-            "bias": bias,
-            "atm": atm
-        }
+    atm = round(spot / strike_step) * strike_step
 
-    except Exception as e:
-        return {"error": str(e)}
-
-# ======================================================
-# 📈 Fetch SENSEX & NIFTY
-# ======================================================
-sensex = get_index_trend("^BSESN", 100)
-nifty  = get_index_trend("^NSEI", 50)
+    return {
+        "spot": spot,
+        "ema20": ema20,
+        "ema50": ema50,
+        "trend": trend,
+        "bias": bias,
+        "atm": atm
+    }
 
 # ======================================================
-# 🎯 Option Levels (adjustable placeholders)
+# 📈 Fetch SENSEX & NIFTY (CORRECT SYMBOLS)
 # ======================================================
-CE_LEVEL = 80
-PE_LEVEL = 80
-TGT_CE = (380, 450)
-TGT_PE = (200, 300)
+sensex = get_index_trend("^BSESN", 100)        # SENSEX
+nifty  = get_index_trend("NIFTY 50.NS", 50)    # NIFTY 50 (FIXED)
 
 # ======================================================
-# 🧩 Build Telegram message block (Trading Call Style)
+# 🎯 Option Levels (static / placeholder)
+# ======================================================
+CE = {"buy": 320, "sl": 260, "t1": 380, "t2": 450}
+PE = {"buy": 300, "sl": 360, "t1": 220, "t2": 180}
+
+# ======================================================
+# 🧩 Message builder
 # ======================================================
 def build_block(name, data):
-    if "error" in data:
-        return f"""
+    header = f"""
 📊 {name} DAILY SETUP
-❌ Data unavailable
-Yahoo Finance issue
+🕒 {datetime.datetime.now().strftime("%d %b %Y | %I:%M %p")}
+📈 Spot: {data['spot']}
+📐 EMA20: {data['ema20']} | EMA50: {data['ema50']}
+🧭 Trend: {data['trend']}
 """
 
     if data["bias"] == "CE":
-        return f"""
-📊 {name} {data['atm']} CE
-Below : {CE_LEVEL}
-TGT : {TGT_CE[0]} / {TGT_CE[1]}
-WAIT FOR ACTIVE
+        return header + f"""
+{name} {data['atm']} CE
+BUY ABOVE {CE['buy']}
+SL {CE['sl']}
+TGT {CE['t1']} / {CE['t2']}
 """
     elif data["bias"] == "PE":
-        return f"""
-📊 {name} {data['atm']} PE
-Above : {PE_LEVEL}
-TGT : {TGT_PE[0]} / {TGT_PE[1]}
-WAIT FOR ACTIVE
+        return header + f"""
+{name} {data['atm']} PE
+BUY BELOW {PE['buy']}
+SL {PE['sl']}
+TGT {PE['t1']} / {PE['t2']}
 """
     else:
-        return f"""
-📊 {name} {data['atm']}
+        return header + """
 Market is SIDEWAYS ⚖️
 Option buying not recommended
 """
 
 # ======================================================
-# 📩 Combine Messages
+# 📩 Final Telegram message
 # ======================================================
 message = (
     build_block("SENSEX", sensex)
@@ -110,13 +108,13 @@ message = (
     + build_block("NIFTY", nifty)
     + """
 
-⚠️ Educational purpose only
-Not a buy/sell recommendation
+📚 Educational purpose only
+⚠️ Not a buy/sell recommendation
 """
 )
 
 # ======================================================
-# 🚀 Send Telegram Message
+# 🚀 Send to Telegram
 # ======================================================
 url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
 payload = {
